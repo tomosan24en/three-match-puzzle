@@ -47,9 +47,11 @@ class Field:
                 self.get_tile(x, y).draw(x, y)
 
     def pop(self, x: int, y: int) -> None:
+        """1枚のタイルを消去する"""
         self.set_tile(x, y, TILE_BLANK)
 
     def erase(self) -> tuple[bool, int]:
+        """3つ繋がったタイルを消去し、消去したタイルが存在したかと消去した回数を返す"""
         erase_count = 0
         for x in range(1, self.width - 1):
             for y in range(0, self.height):
@@ -78,9 +80,10 @@ class Field:
         return erase_count > 0, erase_count
 
     def drop(self) -> None:
+        """空白以外のタイルを下に落とす"""
         rem = []
         for x in range(self.width):
-            drop_y = self.height - 1
+            drop_y = self.height - 1 # 次に落とす位置
             for bottom in range(self.height):
                 y = self.height - bottom - 1
                 tile = self.get_tile(x, y)
@@ -92,7 +95,10 @@ class Field:
         self.dropped_spaces = rem
 
     def fill(self) -> None:
-        """dropを呼び出してから実行してください"""
+        """
+        空白のタイルをランダムに埋める
+        dropしてから実行してください
+        """
         for x, rem in enumerate(self.dropped_spaces):
             for y in range(rem + 1):
                 self.set_tile(x, y, random.choice(BASIC_TILES))
