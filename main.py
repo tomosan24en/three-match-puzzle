@@ -60,7 +60,7 @@ class Field:
 
     def pop(self, x: int, y: int) -> tuple[int, int, int]:
         """
-        1枚のタイルを消去し、アイテムの処理を行う
+        1枚のタイルを消去し、連鎖的にアイテムの処理を行う
         さらに、消えたタイルの枚数、消えたボムの個数、消えたラインの回数を返す
         """
         tile = self.get_tile(x, y)
@@ -70,7 +70,6 @@ class Field:
         elif tile == TILE_BLANK:
             return (0, 0, 0)
         elif tile == TILE_BOMB:
-            print("bomb")
             snt = 0
             snb = 1
             snl = 0
@@ -87,11 +86,62 @@ class Field:
                     snb += nb
                     snl += nl
             return (snt, snb, snl)
+        elif tile == TILE_LINE:
+            snt = 0
+            snb = 0
+            snl = 1
+            # 横
+            for px in range(self.width):
+                if px == x:
+                    continue
+                nt, nb, nl = self.pop(px, y)
+                snt += nt
+                snb += nb
+                snl += nl
+            # 縦
+            for py in range(self.height):
+                if py == y:
+                    continue
+                nt, nb, nl = self.pop(x, py)
+                snt += nt
+                snb += nb
+                snl += nl
+            return (snt, snb, snl)
 
     def erase(self, generate_powerups: bool = True) -> tuple[bool, int]:
-        """直線状3つ繋がったタイルを消去し、消去したタイルが存在したかと消去したタイルの枚数を返す"""
+        """直線状に3つ繋がったタイルを消去し、消去したタイルが存在したかと消去したタイルの枚数を返す"""
         erased = False
         erase_count = 0
+        # パワーアップを作るループ
+        for x in range(0, self.width - 1):
+            for y in range(0, self.width - 1):
+                tile = self.get_tile(x, y)
+                if not tile in BASIC_TILES:
+                    continue
+                left = self.get_tile(x - 1, y)
+                right = self.get_tile(x + 1, y)
+                up = self.get_tile(x, y - 1)
+                down = self.get_tile(x, y + 1)
+                rightdown = self.get_tile(x + 1, y + 1)
+                if tile == up and tile == down and tile == left and tile == right:
+                    self.set_tile(x, y, TILE_LINE if generate_powerups else TILE_BLANK)
+                    self.set_tile(x, y - 1, TILE_BLANK)
+                    self.set_tile(x, y + 1, TILE_BLANK)
+                    self.set_tile(x - 1, y, TILE_BLANK)
+                    self.set_tile(x + 1, y, TILE_BLANK)
+                    erase_count += 5
+                    erased = True
+                    continue
+                if tile == right and tile == down and tile == rightdown:
+                    self.set_tile(x, y, TILE_BOMB if generate_powerups else TILE_BLANK)
+                    self.set_tile(x, y + 1, TILE_BLANK)
+                    self.set_tile(x + 1, y, TILE_BLANK)
+                    self.set_tile(x + 1, y + 1, TILE_BLANK)
+                    erase_count += 4
+                    erased = True
+                    continue
+
+        # その他のタイルを消すループ
         for x in range(0, self.width):
             for y in range(0, self.height):
                 tile = self.get_tile(x, y)
@@ -101,15 +151,6 @@ class Field:
                 right = self.get_tile(x + 1, y)
                 up = self.get_tile(x, y - 1)
                 down = self.get_tile(x, y + 1)
-                if tile == up and tile == down and tile == left and tile == right:
-                    self.set_tile(x, y, TILE_BOMB if generate_powerups else TILE_BLANK)
-                    self.set_tile(x, y - 1, TILE_BLANK)
-                    self.set_tile(x, y + 1, TILE_BLANK)
-                    self.set_tile(x - 1, y, TILE_BLANK)
-                    self.set_tile(x + 1, y, TILE_BLANK)
-                    erase_count += 5
-                    erased = True
-                    continue
                 if tile == up and tile == down:
                     self.set_tile(x, y - 1, TILE_BLANK)
                     self.set_tile(x, y, TILE_BLANK)
@@ -172,15 +213,15 @@ class Cursor:
         if pyxel.btnp(pyxel.KEY_DOWN):
             dy += 1
 
-        if 0 <= self.x + dy < width:
+        if 0 <= self.x + dx < width:
             self.x += dx
         if 0 <= self.y + dy < height:
             self.y += dy
 
 class App:
     def __init__(self):
-        self.width = 16
-        self.height = 16
+        self.width = 8
+        self.height = 8
         pyxel.init(self.width * 8, self.height * 8 + 10, "Pixel Puzzle")
         pyxel.load("./my_resource.pyxres")
         self.init()
