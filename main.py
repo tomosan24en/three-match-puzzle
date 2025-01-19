@@ -20,6 +20,8 @@ TILE_ORANGE = Tile((1, 0))
 TILE_GREEN = Tile((2, 0))
 TILE_BLUE = Tile((3, 0))
 TILE_PURPLE = Tile((4, 0))
+TILE_LINE = Tile((0, 1))
+TILE_BOMB = Tile((1, 1))
 
 BASIC_TILES = (
     TILE_RED, TILE_ORANGE, TILE_GREEN, TILE_BLUE, TILE_PURPLE,
@@ -34,9 +36,19 @@ class Field:
             self.tile_list.append([])
             for y in range(self.height):
                 self.tile_list[x].append(random.choice(BASIC_TILES))
+        while True:
+            erased, _ = self.erase(generate_powerups=False)
+            if erased:
+                self.drop()
+                self.fill()
+            else:
+                break
 
     def get_tile(self, x: int, y: int) -> Tile:
-        return self.tile_list[x][y]
+        if 0 <= x < self.width and 0 <= y < self.height:
+            return self.tile_list[x][y]
+        else:
+            return TILE_BLANK
     
     def set_tile(self, x: int, y: int, new_tile: Tile) -> None:
         self.tile_list[x][y] = new_tile
@@ -46,38 +58,73 @@ class Field:
             for y in range(self.height):
                 self.get_tile(x, y).draw(x, y)
 
-    def pop(self, x: int, y: int) -> None:
-        """1枚のタイルを消去する"""
+    def pop(self, x: int, y: int) -> tuple[int, int, int]:
+        """
+        1枚のタイルを消去し、アイテムの処理を行う
+        さらに、消えたタイルの枚数、消えたボムの個数、消えたラインの回数を返す
+        """
+        tile = self.get_tile(x, y)
         self.set_tile(x, y, TILE_BLANK)
+        if tile in BASIC_TILES:
+            return (1, 0, 0)
+        elif tile == TILE_BLANK:
+            return (0, 0, 0)
+        elif tile == TILE_BOMB:
+            print("bomb")
+            snt = 0
+            snb = 1
+            snl = 0
+            left = max(x - 1, 0)
+            right = min(x + 2, self.width)
+            top = max(y - 1, 0)
+            bottom = min(y + 2, self.height)
+            for px in range(left, right):
+                for py in range(top, bottom):
+                    if px == x and py == y:
+                        continue
+                    nt, nb, nl = self.pop(px, py)
+                    snt += nt
+                    snb += nb
+                    snl += nl
+            return (snt, snb, snl)
 
-    def erase(self) -> tuple[bool, int]:
-        """3つ繋がったタイルを消去し、消去したタイルが存在したかと消去した回数を返す"""
+    def erase(self, generate_powerups: bool = True) -> tuple[bool, int]:
+        """直線状3つ繋がったタイルを消去し、消去したタイルが存在したかと消去したタイルの枚数を返す"""
+        erased = False
         erase_count = 0
-        for x in range(1, self.width - 1):
+        for x in range(0, self.width):
             for y in range(0, self.height):
                 tile = self.get_tile(x, y)
-                if tile.is_blank():
+                if not tile in BASIC_TILES:
                     continue
                 left = self.get_tile(x - 1, y)
                 right = self.get_tile(x + 1, y)
-                if tile == left and tile == right:
-                    self.set_tile(x - 1, y, TILE_BLANK)
-                    self.set_tile(x, y, TILE_BLANK)
-                    self.set_tile(x + 1, y, TILE_BLANK)
-                    erase_count += 1
-        for x in range(0, self.width):
-            for y in range(1, self.height - 1):
-                tile = self.get_tile(x, y)
-                if tile.is_blank():
-                    continue
                 up = self.get_tile(x, y - 1)
                 down = self.get_tile(x, y + 1)
+                if tile == up and tile == down and tile == left and tile == right:
+                    self.set_tile(x, y, TILE_BOMB if generate_powerups else TILE_BLANK)
+                    self.set_tile(x, y - 1, TILE_BLANK)
+                    self.set_tile(x, y + 1, TILE_BLANK)
+                    self.set_tile(x - 1, y, TILE_BLANK)
+                    self.set_tile(x + 1, y, TILE_BLANK)
+                    erase_count += 5
+                    erased = True
+                    continue
                 if tile == up and tile == down:
                     self.set_tile(x, y - 1, TILE_BLANK)
                     self.set_tile(x, y, TILE_BLANK)
                     self.set_tile(x, y + 1, TILE_BLANK)
-                    erase_count += 1
-        return erase_count > 0, erase_count
+                    erase_count += 3
+                    erased = True
+                    continue
+                if tile == left and tile == right:
+                    self.set_tile(x - 1, y, TILE_BLANK)
+                    self.set_tile(x, y, TILE_BLANK)
+                    self.set_tile(x + 1, y, TILE_BLANK)
+                    erase_count += 3
+                    erased = True
+                    continue
+        return erased, erase_count
 
     def drop(self) -> None:
         """空白以外のタイルを下に落とす"""
@@ -132,8 +179,8 @@ class Cursor:
 
 class App:
     def __init__(self):
-        self.width = 6
-        self.height = 6
+        self.width = 16
+        self.height = 16
         pyxel.init(self.width * 8, self.height * 8 + 10, "Pixel Puzzle")
         pyxel.load("./my_resource.pyxres")
         self.init()
@@ -177,7 +224,8 @@ class App:
         else:
             self.cursor.update(self.width, self.height)
             if pyxel.btnp(pyxel.KEY_SPACE):
-                self.field.pop(self.cursor.x, self.cursor.y)
+                tiles, bombs, lines = self.field.pop(self.cursor.x, self.cursor.y)
+                self.score += tiles * 100 + (bombs + lines) * 200
                 self.dropping = True
                 self.drop_start_frame = pyxel.frame_count
 
